@@ -559,7 +559,6 @@
         <div class="row" style="gap:8px;">
           <button class="btn primary" id="btnSend" type="button">Senden</button>
           <button class="btn" id="btnPrint" type="button">Druckansicht / PDF</button>
-          <button class="btn" id="btnExportJson" type="button">Export JSON</button>
           <button class="btn" id="btnReset" type="button">Alles zurücksetzen</button>
         </div>
         <span class="muted" style="font-size:12px;">Version 1.1 - Sendefunktion + Fotos in Zustand/Schaden</span>
@@ -1596,11 +1595,6 @@
       document.getElementById('btnPrint').addEventListener('click', async ()=>{
         if(!validateForm()) return;
         await openPrintView();
-      });
-
-      document.getElementById('btnExportJson').addEventListener('click', async ()=>{
-        if(!validateForm()) return;
-        await exportJson();
       });
 
       document.getElementById('btnReset').addEventListener('click', ()=>{
