@@ -734,19 +734,6 @@
           <input type="hidden" id="sigEmployeeData">
           <div class="msg muted" style="margin-top:10px;">Mit der Unterschrift bestätigt der Mitarbeiter die Richtigkeit der Angaben.</div>
         </div>
-
-        <div class="sig">
-          <div class="top">
-            <div>
-              <strong>Kunde / Fahrer (optional)</strong><br>
-              <span class="muted" style="font-size:12px;">Falls anwesend.</span>
-            </div>
-            <button class="btn small no-print" type="button" id="clearSigCustomer">Löschen</button>
-          </div>
-          <canvas id="sigCustomer"></canvas>
-          <input type="hidden" id="sigCustomerData">
-          <div class="msg muted" style="margin-top:10px;">Optional: Kunde bestätigt den Fahrzeugzustand.</div>
-        </div>
       </div>
 
     </div>
@@ -1157,8 +1144,7 @@
         damage: [],
         photos: [],
         signatures: {
-          employee: document.getElementById('sigEmployeeData').value,
-          customer: document.getElementById('sigCustomerData').value
+          employee: document.getElementById('sigEmployeeData').value
         }
       };
 
@@ -1258,10 +1244,6 @@
         ? `<img src="${data.signatures.employee}" alt="Unterschrift Mitarbeiter" style="width:100%; height:120px; object-fit:contain; border:1px solid #ccc; border-radius:10px;">`
         : `<div style="color:#b00;">Fehlt</div>`;
 
-      const sigCustomerHtml = data.signatures.customer
-        ? `<img src="${data.signatures.customer}" alt="Unterschrift Kunde" style="width:100%; height:120px; object-fit:contain; border:1px solid #ccc; border-radius:10px;">`
-        : `<div style="color:#555;">Keine</div>`;
-
       // Almas Logo als Base64
       const almasLogoBase64 = "data:image/jpeg;base64,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";
 
@@ -1356,17 +1338,8 @@
         </div>
 
         <div class="box">
-          <div class="box-title">Unterschriften</div>
-          <div class="grid">
-            <div style="grid-column: span 6;">
-              <div class="k">Mitarbeiter</div>
-              ${sigEmployeeHtml}
-            </div>
-            <div style="grid-column: span 6;">
-              <div class="k">Kunde/Fahrer (optional)</div>
-              ${sigCustomerHtml}
-            </div>
-          </div>
+          <div class="box-title">Unterschrift Mitarbeiter</div>
+          ${sigEmployeeHtml}
         </div>
 
         <div class="footer">
@@ -1578,7 +1551,7 @@
 
       // Signatures
       setupSignaturePad('sigEmployee','sigEmployeeData','clearSigEmployee');
-      setupSignaturePad('sigCustomer','sigCustomerData','clearSigCustomer');
+      // Kunden-Unterschrift entfernt
 
       // Buttons
       document.getElementById('btnSend').addEventListener('click', async ()=>{
