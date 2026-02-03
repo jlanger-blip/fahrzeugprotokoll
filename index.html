@@ -1079,7 +1079,8 @@
     }
 
     function getValue(id){
-      return document.getElementById(id).value.trim();
+      const el = document.getElementById(id);
+      return el ? el.value.trim() : "";
     }
 
     function getCheckbox(id){
@@ -1160,7 +1161,6 @@
         date: fmtDateISOToDE(getValue('date')),
         time: getValue('time'),
         location: getValue('location'),
-        company: getValue('company'),
         employee: getValue('employee'),
         employeeEmail: getValue('employeeEmail'),
         plate: getValue('plate'),
