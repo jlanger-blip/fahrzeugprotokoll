@@ -6,12 +6,12 @@
   <title>Interaktives Fahrzeugzustandsprotokoll</title>
   <style>
     :root{
-      --bg:#0b1020;
-      --card:#111833;
-      --ink:#e9eefc;
-      --muted:#a9b4d6;
-      --line:rgba(233,238,252,.15);
-      --accent:#7aa2ff;
+      --bg:#1a1a1a;
+      --card:#242424;
+      --ink:#f5f5f5;
+      --muted:#a0a0a0;
+      --line:rgba(255,255,255,.12);
+      --accent:#c8102e;
       --danger:#ff6b6b;
       --ok:#35d39a;
       --warning:#ffd166;
@@ -20,7 +20,7 @@
     body{
       margin:0;
       font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji","Segoe UI Emoji";
-      background: linear-gradient(180deg, var(--bg), #070a14);
+      background: linear-gradient(180deg, var(--bg), #0f0f0f);
       color:var(--ink);
     }
     .wrap{
@@ -94,18 +94,18 @@
     /* Fix dropdown readability on mobile */
     select{
       color-scheme: dark;
-      background-color: #1a2242;
+      background-color: #2a2a2a;
     }
     select option{
-      background-color: #1a2242;
-      color: #e9eefc;
+      background-color: #2a2a2a;
+      color: #f5f5f5;
       padding: 10px;
     }
     textarea{ min-height: 70px; resize: vertical; }
     input::placeholder, textarea::placeholder{ color: rgba(233,238,252,.45); }
     input:focus, select:focus, textarea:focus{
-      border-color: rgba(122,162,255,.6);
-      box-shadow: 0 0 0 3px rgba(122,162,255,.15);
+      border-color: rgba(200,16,46,.7);
+      box-shadow: 0 0 0 3px rgba(200,16,46,.2);
     }
     .row{
       display:flex;
@@ -123,10 +123,10 @@
       cursor:pointer;
       font-weight:600;
     }
-    .btn:hover{ border-color: rgba(122,162,255,.6); }
+    .btn:hover{ border-color: rgba(200,16,46,.7); }
     .btn.primary{
-      background: linear-gradient(180deg, rgba(122,162,255,.35), rgba(122,162,255,.15));
-      border-color: rgba(122,162,255,.65);
+      background: linear-gradient(180deg, rgba(200,16,46,.45), rgba(200,16,46,.2));
+      border-color: rgba(200,16,46,.75);
     }
     .btn.danger{
       background: linear-gradient(180deg, rgba(255,107,107,.25), rgba(255,107,107,.08));
@@ -496,12 +496,14 @@
 <body>
   <div class="wrap">
     <header>
-      <div class="title">
-        <h1>Interaktives Fahrzeugzustandsprotokoll</h1>
-        <p>
-          Digitales Protokoll zur Fahrzeug-Übergabe/Rückgabe inklusive Pflichtfotos.
-          Alles bleibt lokal im Browser, bis du auf <b>Senden</b> klickst. Danach kannst du teilen, drucken oder als PDF speichern.
-        </p>
+      <div style="display:flex; align-items:center; gap:16px;">
+        <img src="almas-logo-small.jpg" alt="ALMAS INDUSTRIES" style="height:48px; border-radius:8px;">
+        <div class="title">
+          <h1 style="color:var(--accent);">Fahrzeugzustandsprotokoll</h1>
+          <p>
+            Digitales Protokoll zur Fahrzeug-Übergabe/Rückgabe inklusive Pflichtfotos.
+          </p>
+        </div>
       </div>
       <div class="pill">Tipp: Auf dem Smartphone lassen sich Fotos direkt mit der Kamera aufnehmen.</div>
     </header>
