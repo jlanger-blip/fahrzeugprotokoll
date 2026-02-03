@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 Fahrzeugprotokoll Webhook Server
-Empfängt Protokolle und lädt sie zu Google Drive hoch.
+Empfängt Protokolle, lädt Fotos zu Google Drive und sendet Email.
 
 Starten mit:
   python webhook_server.py
 
 Endpoint:
-  POST http://localhost:8080/webhook/fahrzeugprotokoll
+  POST http://localhost:8085/webhook/fahrzeugprotokoll
 """
 
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-from upload_to_drive import process_protocol
+from process_protocol import process_protocol
 import traceback
 
 app = Flask(__name__)
@@ -51,5 +51,5 @@ def health_check():
 
 if __name__ == '__main__':
     print("🚀 Fahrzeugprotokoll Webhook Server")
-    print("📍 Endpoint: http://localhost:8080/webhook/fahrzeugprotokoll")
-    app.run(host='0.0.0.0', port=8080, debug=False)
+    print("📍 Endpoint: http://localhost:8085/webhook/fahrzeugprotokoll")
+    app.run(host='0.0.0.0', port=8085, debug=False)
