@@ -15,6 +15,22 @@
       --danger:#ef4444;
       --ok:#10b981;
       --warning:#f59e0b;
+      --input-bg:#ffffff;
+      --table-header:#f9fafb;
+      --hover-bg:#f9fafb;
+    }
+    body.dark{
+      --bg:#1a1a1a;
+      --card:#242424;
+      --ink:#f5f5f5;
+      --muted:#a0a0a0;
+      --line:rgba(255,255,255,.12);
+      --input-bg:#2a2a2a;
+      --table-header:#2a2a2a;
+      --hover-bg:#2a2a2a;
+    }
+    body.dark select{
+      color-scheme: dark;
     }
     *{box-sizing:border-box;}
     body{
@@ -54,7 +70,7 @@
       padding:8px 10px;
       border:1px solid var(--line);
       border-radius:999px;
-      background: #fff;
+      background: var(--card);
       color:var(--muted);
       font-size: 12px;
       white-space:nowrap;
@@ -84,22 +100,22 @@
     }
     input[type="text"], input[type="number"], input[type="date"], input[type="time"], input[type="email"], select, textarea{
       width:100%;
-      background: #fff;
-      border:2px solid #e5e7eb;
+      background: var(--input-bg);
+      border:2px solid var(--line);
       color:var(--ink);
       border-radius: 10px;
       padding:10px 12px;
       outline:none;
-      transition: border-color 0.2s, box-shadow 0.2s;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
     }
     /* Fix dropdown readability */
     select{
       color-scheme: light;
-      background-color: #fff;
+      background-color: var(--input-bg);
     }
     select option{
-      background-color: #fff;
-      color: #1f2937;
+      background-color: var(--input-bg);
+      color: var(--ink);
       padding: 10px;
     }
     textarea{ min-height: 70px; resize: vertical; }
@@ -119,8 +135,8 @@
     }
     .btn{
       appearance:none;
-      border:1px solid #e5e7eb;
-      background: #fff;
+      border:1px solid var(--line);
+      background: var(--card);
       color: var(--ink);
       padding: 10px 14px;
       border-radius: 12px;
@@ -130,6 +146,12 @@
       box-shadow: 0 1px 2px rgba(0,0,0,.05);
     }
     .btn:hover{ border-color: var(--accent); color: var(--accent); }
+    .btn.icon{
+      padding: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
     .btn.primary{
       background: linear-gradient(180deg, #dc2626, #b91c1c);
       border-color: #b91c1c;
@@ -175,23 +197,23 @@
       border-collapse: collapse;
       overflow:hidden;
       border-radius: 12px;
-      border:1px solid #e5e7eb;
-      background: #fff;
+      border:1px solid var(--line);
+      background: var(--card);
     }
     th, td{
       padding:10px;
-      border-bottom:1px solid #e5e7eb;
+      border-bottom:1px solid var(--line);
       vertical-align:top;
     }
     th{
       font-size: 12px;
       color: var(--muted);
       text-align:left;
-      background: #f9fafb;
+      background: var(--table-header);
       font-weight: 600;
     }
     tr:last-child td{ border-bottom:none; }
-    tr:hover{ background: #f9fafb; }
+    tr:hover{ background: var(--hover-bg); }
     .status{
       width: 150px;
     }
@@ -203,9 +225,9 @@
       padding: 4px 8px;
       border-radius: 999px;
       font-size: 12px;
-      border:1px solid #e5e7eb;
+      border:1px solid var(--line);
       color: var(--muted);
-      background: #f9fafb;
+      background: var(--table-header);
     }
     .tag.ok{ border-color: #86efac; color: #16a34a; background: #f0fdf4; }
     .tag.bad{ border-color: #fca5a5; color: #dc2626; background: #fef2f2; }
@@ -220,10 +242,10 @@
       header{ flex-direction:column; align-items:flex-start; }
     }
     .photo-card{
-      border: 1px dashed #d1d5db;
+      border: 1px dashed var(--line);
       border-radius: 14px;
       padding: 12px;
-      background: #f9fafb;
+      background: var(--table-header);
       display:flex;
       flex-direction:column;
       gap:10px;
@@ -248,16 +270,16 @@
       width:100%;
       padding:10px;
       border-radius: 12px;
-      border:1px solid #e5e7eb;
-      background: #fff;
+      border:1px solid var(--line);
+      background: var(--input-bg);
       color: var(--muted);
     }
     .preview{
       width:100%;
       aspect-ratio: 4 / 3;
       border-radius: 12px;
-      border:1px solid #e5e7eb;
-      background: #fff;
+      border:1px solid var(--line);
+      background: var(--card);
       display:flex;
       align-items:center;
       justify-content:center;
@@ -285,10 +307,10 @@
       .sig-wrap{ grid-template-columns: 1fr; }
     }
     .sig{
-      border:1px solid #e5e7eb;
+      border:1px solid var(--line);
       border-radius: 14px;
       padding: 12px;
-      background: #f9fafb;
+      background: var(--table-header);
     }
     .sig .top{
       display:flex;
@@ -301,8 +323,8 @@
       width:100%;
       height: 180px;
       border-radius: 12px;
-      border:1px dashed #d1d5db;
-      background: #fff;
+      border:1px dashed var(--line);
+      background: var(--card);
       touch-action: none;
     }
 
@@ -314,8 +336,8 @@
       margin-top: 12px;
       padding: 10px 12px;
       border-radius: 12px;
-      border: 1px solid #e5e7eb;
-      background: #f9fafb;
+      border: 1px solid var(--line);
+      background: var(--table-header);
       color: var(--muted);
     }
     .msg.error{
@@ -360,8 +382,8 @@
         border-radius: 14px;
         margin-bottom: 12px;
         padding: 14px;
-        background: #fff;
-        border: 1px solid #e5e7eb;
+        background: var(--card);
+        border: 1px solid var(--line);
       }
       .table-scroll table tbody td{
         display: block;
@@ -372,7 +394,7 @@
         font-weight: 600;
         font-size: 14px;
         padding-bottom: 12px;
-        border-bottom: 1px solid #e5e7eb;
+        border-bottom: 1px solid var(--line);
         margin-bottom: 8px;
       }
       .table-scroll table tbody td:not(:first-child):before{
@@ -523,7 +545,13 @@
           </p>
         </div>
       </div>
-      <div class="pill">Tipp: Auf dem Smartphone lassen sich Fotos direkt mit der Kamera aufnehmen.</div>
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button class="btn icon" id="btnDarkMode" title="Dark Mode umschalten" type="button">
+          <svg id="iconSun" width="20" height="20" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 2a1 1 0 011 1v1a1 1 0 11-2 0V3a1 1 0 011-1zm4 8a4 4 0 11-8 0 4 4 0 018 0zm-.464 4.95l.707.707a1 1 0 001.414-1.414l-.707-.707a1 1 0 00-1.414 1.414zm2.12-10.607a1 1 0 010 1.414l-.706.707a1 1 0 11-1.414-1.414l.707-.707a1 1 0 011.414 0zM17 11a1 1 0 100-2h-1a1 1 0 100 2h1zm-7 4a1 1 0 011 1v1a1 1 0 11-2 0v-1a1 1 0 011-1zM5.05 6.464A1 1 0 106.465 5.05l-.708-.707a1 1 0 00-1.414 1.414l.707.707zm1.414 8.486l-.707.707a1 1 0 01-1.414-1.414l.707-.707a1 1 0 011.414 1.414zM4 11a1 1 0 100-2H3a1 1 0 000 2h1z" clip-rule="evenodd"/></svg>
+          <svg id="iconMoon" width="20" height="20" fill="currentColor" viewBox="0 0 20 20" style="display:none;"><path d="M17.293 13.293A8 8 0 016.707 2.707a8.001 8.001 0 1010.586 10.586z"/></svg>
+        </button>
+        <div class="pill" style="display:none;">Tipp: Fotos direkt mit Kamera</div>
+      </div>
     </header>
 
     <div class="card">
@@ -1573,6 +1601,31 @@
       });
 
       showMessage("Fülle das Protokoll aus. Danach kannst du es <b>Senden</b> oder die <b>Druckansicht / PDF</b> öffnen.", "ok");
+
+      // Dark Mode Toggle
+      const darkModeBtn = document.getElementById('btnDarkMode');
+      const iconSun = document.getElementById('iconSun');
+      const iconMoon = document.getElementById('iconMoon');
+      
+      // Check saved preference or system preference
+      const savedDark = localStorage.getItem('darkMode');
+      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      
+      function setDarkMode(isDark) {
+        document.body.classList.toggle('dark', isDark);
+        iconSun.style.display = isDark ? 'none' : 'block';
+        iconMoon.style.display = isDark ? 'block' : 'none';
+        localStorage.setItem('darkMode', isDark ? '1' : '0');
+      }
+      
+      // Initialize
+      if (savedDark === '1' || (savedDark === null && prefersDark)) {
+        setDarkMode(true);
+      }
+      
+      darkModeBtn.addEventListener('click', () => {
+        setDarkMode(!document.body.classList.contains('dark'));
+      });
     }
 
     init();
