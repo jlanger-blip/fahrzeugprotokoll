@@ -595,9 +595,13 @@
           <input id="location" type="text" placeholder="z.B. Berlin Mitte" required>
         </div>
 
-        <div class="field" style="grid-column: span 12;">
+        <div class="field" style="grid-column: span 6;">
           <label for="employee">Mitarbeiter *</label>
           <input id="employee" type="text" placeholder="Vorname Nachname" required>
+        </div>
+        <div class="field" style="grid-column: span 6;">
+          <label for="employeeEmail">E-Mail Mitarbeiter</label>
+          <input id="employeeEmail" type="email" placeholder="vorname.nachname@almas-industries.de">
         </div>
       </div>
 
@@ -776,9 +780,25 @@
         <option value="">Bitte auswählen ...</option>
         <option value="OK">OK</option>
         <option value="Schaden">Schaden</option>
-        <option value="Nicht geprüft">Nicht geprüft</option>
       `;
       return sel;
+    }
+
+    function createInteriorStatusCheckboxes(name){
+      const wrap = document.createElement('div');
+      wrap.className = 'interior-status-wrap';
+      wrap.innerHTML = `
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;">
+          <input type="checkbox" name="${name}_ok" value="OK" class="interior-ok"> OK
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; margin-bottom:4px; cursor:pointer;">
+          <input type="checkbox" name="${name}_verschmutzt" value="Verschmutzt" class="interior-extra"> Verschmutzt
+        </label>
+        <label style="display:flex; align-items:center; gap:6px; cursor:pointer;">
+          <input type="checkbox" name="${name}_beschaedigt" value="Beschädigt" class="interior-extra"> Beschädigt
+        </label>
+      `;
+      return wrap;
     }
 
     function readFileAsDataURL(file){
@@ -887,7 +907,7 @@
       return wrap;
     }
 
-    function renderInspectionTable(tableId, rows, prefix){
+    function renderInspectionTable(tableId, rows, prefix, isInterior = false){
       const tbody = document.querySelector(`#${tableId} tbody`);
       tbody.innerHTML = "";
       
@@ -901,15 +921,22 @@
 
         const c2 = document.createElement('td');
         c2.setAttribute('data-title', 'Zustand');
-        const sel = createStatusSelect(`${prefix}_${idx}`);
-        sel.classList.add('statusSelect');
-        c2.appendChild(sel);
+        
+        if(isInterior){
+          const checkboxes = createInteriorStatusCheckboxes(`${prefix}_${idx}`);
+          checkboxes.classList.add('interiorStatus');
+          c2.appendChild(checkboxes);
+        } else {
+          const sel = createStatusSelect(`${prefix}_${idx}`);
+          sel.classList.add('statusSelect');
+          c2.appendChild(sel);
+        }
 
         const c3 = document.createElement('td');
         c3.classList.add('note-cell');
         c3.setAttribute('data-title', 'Bemerkung');
         const ta = document.createElement('textarea');
-        ta.placeholder = "z.B. Kratzer links, Delle 3cm, Steinschlag ...";
+        ta.placeholder = isInterior ? "z.B. Krümel im Fußraum, Flecken ..." : "z.B. Kratzer links, Delle 3cm, Steinschlag ...";
         ta.name = `${prefix}_note_${idx}`;
         c3.appendChild(ta);
 
@@ -988,10 +1015,14 @@
     }
 
     function anyDamageSelected(){
+      // Check exterior selects for "Schaden"
       const selects = document.querySelectorAll('.statusSelect');
       for(const sel of selects){
         if(sel.value === 'Schaden') return true;
       }
+      // Check interior checkboxes for "Beschädigt"
+      const beschaedigtCheckboxes = document.querySelectorAll('.interiorStatus input[value="Beschädigt"]:checked');
+      if(beschaedigtCheckboxes.length > 0) return true;
       return false;
     }
 
@@ -1009,10 +1040,21 @@
     }
 
     function hasInspectionDamageEvidence(){
-      const rows = document.querySelectorAll('#tblExterior tbody tr, #tblInterior tbody tr');
-      for(const tr of rows){
+      // Check exterior rows
+      const extRows = document.querySelectorAll('#tblExterior tbody tr');
+      for(const tr of extRows){
         const status = tr.querySelector('select')?.value || "";
         if(status !== "Schaden") continue;
+        const note = tr.querySelector('textarea')?.value?.trim() || "";
+        const store = tr.querySelector('.insp-photos-data');
+        const photos = store ? safeJsonArray(store.value) : [];
+        if(note || photos.length) return true;
+      }
+      // Check interior rows for "Beschädigt"
+      const intRows = document.querySelectorAll('#tblInterior tbody tr');
+      for(const tr of intRows){
+        const beschaedigt = tr.querySelector('input[value="Beschädigt"]:checked');
+        if(!beschaedigt) continue;
         const note = tr.querySelector('textarea')?.value?.trim() || "";
         const store = tr.querySelector('.insp-photos-data');
         const photos = store ? safeJsonArray(store.value) : [];
@@ -1121,6 +1163,7 @@
         location: getValue('location'),
         company: getValue('company'),
         employee: getValue('employee'),
+        employeeEmail: getValue('employeeEmail'),
         plate: getValue('plate'),
         model: getValue('model'),
         vin: getValue('vin'),
@@ -1152,7 +1195,10 @@
       const intRows = document.querySelectorAll('#tblInterior tbody tr');
       intRows.forEach((tr)=>{
         const area = tr.children[0].textContent;
-        const status = tr.querySelector('select')?.value || "";
+        // Interior uses checkboxes, collect all checked values
+        const checkboxes = tr.querySelectorAll('input[type="checkbox"]:checked');
+        const statusArr = Array.from(checkboxes).map(cb => cb.value);
+        const status = statusArr.join(', ') || "";
         const note = tr.querySelector('textarea')?.value || "";
         const store = tr.querySelector('.insp-photos-data');
         const photos = store ? safeJsonArray(store.value) : [];
@@ -1289,7 +1335,8 @@
 
         <div class="box">
           <div class="grid">
-            <div class="kv" style="grid-column: span 12;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
+            <div class="kv" style="grid-column: span 6;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
+            <div class="kv" style="grid-column: span 6;"><div class="k">E-Mail</div><div class="v">${escapeHtml(data.employeeEmail || "-")}</div></div>
 
             <div class="kv" style="grid-column: span 4;"><div class="k">Kennzeichen</div><div class="v">${escapeHtml(data.plate)}</div></div>
             <div class="kv" style="grid-column: span 4;"><div class="k">Marke/Modell</div><div class="v">${escapeHtml(data.model)}</div></div>
@@ -1518,8 +1565,8 @@
     function init(){
       setNowDefaults();
 
-      renderInspectionTable("tblExterior", exteriorRows, "ext");
-      renderInspectionTable("tblInterior", interiorRows, "int");
+      renderInspectionTable("tblExterior", exteriorRows, "ext", false);
+      renderInspectionTable("tblInterior", interiorRows, "int", true);
 
       // Damage table - start with one row
       addDamageRow();
