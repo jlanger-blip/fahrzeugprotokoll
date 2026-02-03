@@ -91,6 +91,16 @@
       padding:10px 10px;
       outline:none;
     }
+    /* Fix dropdown readability on mobile */
+    select{
+      color-scheme: dark;
+      background-color: #1a2242;
+    }
+    select option{
+      background-color: #1a2242;
+      color: #e9eefc;
+      padding: 10px;
+    }
     textarea{ min-height: 70px; resize: vertical; }
     input::placeholder, textarea::placeholder{ color: rgba(233,238,252,.45); }
     input:focus, select:focus, textarea:focus{
@@ -304,7 +314,7 @@
     }
     .muted{ color: var(--muted); }
 
-    /* Better mobile editing + scrollable tables */
+    /* Better mobile editing + responsive tables */
     .table-scroll{
       overflow-x:auto;
       -webkit-overflow-scrolling:touch;
@@ -313,9 +323,102 @@
     .table-scroll table{
       min-width: 820px;
     }
+    
+    /* Mobile-friendly stacked table layout */
+    @media (max-width: 768px){
+      .table-scroll{
+        overflow-x: visible;
+      }
+      .table-scroll table{
+        min-width: 0;
+        border: none;
+        background: transparent;
+      }
+      .table-scroll table thead{
+        display: none;
+      }
+      .table-scroll table tbody tr{
+        display: block;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        padding: 14px;
+        background: rgba(255,255,255,.02);
+      }
+      .table-scroll table tbody td{
+        display: block;
+        border: none;
+        padding: 8px 0;
+      }
+      .table-scroll table tbody td:first-child{
+        font-weight: 600;
+        font-size: 14px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--line);
+        margin-bottom: 8px;
+      }
+      .table-scroll table tbody td:not(:first-child):before{
+        content: attr(data-title);
+        display: block;
+        font-size: 11px;
+        color: var(--muted);
+        margin-bottom: 4px;
+      }
+      .table-scroll table tbody td select,
+      .table-scroll table tbody td textarea{
+        width: 100%;
+      }
+      .note-cell textarea{
+        min-height: 60px;
+      }
+      
+      /* Grid adjustments */
+      .grid{
+        grid-template-columns: 1fr !important;
+      }
+      .grid > .field{
+        grid-column: span 1 !important;
+      }
+      
+      /* Section title */
+      .section-title{
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+      }
+      
+      /* Buttons */
+      .row{
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+      .row .btn{
+        width: 100%;
+        text-align: center;
+      }
+      
+      /* Hide mobile cards container (using CSS table approach instead) */
+      .mobile-cards{
+        display: none;
+      }
+    }
+    
     @media (max-width: 520px){
       input[type="text"], input[type="number"], input[type="date"], input[type="time"], select, textarea{
         font-size: 16px; /* prevents iOS zoom + improves typing */
+      }
+      .wrap{
+        padding: 0 12px;
+      }
+      .card{
+        padding: 12px;
+      }
+      .title h1{
+        font-size: 20px;
+      }
+      .pill{
+        display: none;
       }
     }
 
@@ -442,11 +545,7 @@
           <input id="location" type="text" placeholder="z.B. Berlin Mitte" required>
         </div>
 
-        <div class="field" style="grid-column: span 4;">
-          <label for="company">Unternehmen / Betrieb (optional)</label>
-          <input id="company" type="text" placeholder="Firma / Fuhrpark">
-        </div>
-        <div class="field" style="grid-column: span 4;">
+        <div class="field" style="grid-column: span 6;">
           <label for="employee">Mitarbeiter *</label>
           <input id="employee" type="text" placeholder="Vorname Nachname" required>
         </div>
@@ -473,25 +572,8 @@
           <input id="model" type="text" placeholder="z.B. VW Golf" required>
         </div>
         <div class="field" style="grid-column: span 4;">
-          <label for="vin">FIN / VIN (optional)</label>
-          <input id="vin" type="text" placeholder="17-stellig">
-        </div>
-
-        <div class="field" style="grid-column: span 3;">
-          <label for="color">Farbe (optional)</label>
-          <input id="color" type="text" placeholder="z.B. Schwarz">
-        </div>
-        <div class="field" style="grid-column: span 3;">
           <label for="mileage">Kilometerstand (km) *</label>
           <input id="mileage" type="number" min="0" step="1" placeholder="z.B. 54210" required>
-        </div>
-        <div class="field" style="grid-column: span 3;">
-          <label for="fuel">Tank / Batterie (%) *</label>
-          <input id="fuel" type="number" min="0" max="100" step="1" placeholder="0-100" required>
-        </div>
-        <div class="field" style="grid-column: span 3;">
-          <label for="keys">Anzahl Schlüssel *</label>
-          <input id="keys" type="number" min="0" step="1" value="2" required>
         </div>
 
         <div class="field" style="grid-column: span 12;">
@@ -669,7 +751,7 @@
       {id:"p_rear", title:"Foto 2 - Heck", hint:"Heckansicht komplett", required:true},
       {id:"p_left", title:"Foto 3 - Links", hint:"Linke Seite komplett", required:true},
       {id:"p_right", title:"Foto 4 - Rechts", hint:"Rechte Seite komplett", required:true},
-      {id:"p_dashboard", title:"Foto 5 - Cockpit/Display", hint:"Tacho + Tank/Batterie sichtbar", required:true},
+      {id:"p_dashboard", title:"Foto 5 - Cockpit/Display", hint:"Tacho + Kilometerstand sichtbar", required:true},
       {id:"p_frontinside", title:"Foto 6 - Innen vorne", hint:"Vordersitze + Armaturen", required:true},
       {id:"p_rearinside", title:"Foto 7 - Innen hinten", hint:"Rückbank / Fußraum", required:true},
       {id:"p_trunk", title:"Foto 8 - Kofferraum", hint:"Kofferraum offen", required:true},
@@ -803,25 +885,31 @@
     function renderInspectionTable(tableId, rows, prefix){
       const tbody = document.querySelector(`#${tableId} tbody`);
       tbody.innerHTML = "";
+      
       rows.forEach((label, idx)=>{
         const tr = document.createElement('tr');
+        tr.setAttribute('data-label', label);
 
         const c1 = document.createElement('td');
+        c1.setAttribute('data-title', 'Bereich');
         c1.textContent = label;
 
         const c2 = document.createElement('td');
+        c2.setAttribute('data-title', 'Zustand');
         const sel = createStatusSelect(`${prefix}_${idx}`);
         sel.classList.add('statusSelect');
         c2.appendChild(sel);
 
         const c3 = document.createElement('td');
         c3.classList.add('note-cell');
+        c3.setAttribute('data-title', 'Bemerkung');
         const ta = document.createElement('textarea');
         ta.placeholder = "z.B. Kratzer links, Delle 3cm, Steinschlag ...";
         ta.name = `${prefix}_note_${idx}`;
         c3.appendChild(ta);
 
         const c4 = document.createElement('td');
+        c4.setAttribute('data-title', 'Foto(s)');
         const pc = createPhotoCollector({buttonText:"Foto +", hintText:"Optional. Bei Schaden empfohlen."});
         pc._store.classList.add('insp-photos-data');
         pc._store.name = `${prefix}_photos_${idx}`;
@@ -1164,6 +1252,9 @@
         ? `<img src="${data.signatures.customer}" alt="Unterschrift Kunde" style="width:100%; height:120px; object-fit:contain; border:1px solid #ccc; border-radius:10px;">`
         : `<div style="color:#555;">Keine</div>`;
 
+      // Almas Logo als Base64
+      const almasLogoBase64 = "data:image/jpeg;base64,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";
+
       const html = `
       <!doctype html>
       <html lang="de">
@@ -1172,58 +1263,64 @@
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <title>Fahrzeugzustandsprotokoll - ${escapeHtml(data.plate)}</title>
         <style>
-          body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 18px; color:#111; }
-          h1{ margin:0 0 6px; font-size: 18px; }
+          body{ font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; padding: 18px; color:#111; }
+          .header{ display:flex; justify-content:space-between; align-items:center; padding-bottom:12px; border-bottom:3px solid #c8102e; margin-bottom:16px; }
+          .header img{ height:50px; }
+          .header-text{ text-align:right; }
+          h1{ margin:0 0 6px; font-size: 18px; color:#c8102e; }
           .sub{ color:#444; font-size: 12px; margin-bottom: 12px; }
           .box{ border:1px solid #ddd; border-radius:12px; padding: 12px; margin-bottom: 12px; }
+          .box-title{ font-weight:800; margin-bottom:8px; color:#c8102e; border-bottom:2px solid #c8102e; padding-bottom:4px; }
           .grid{ display:grid; grid-template-columns: repeat(12, 1fr); gap:10px; }
           .kv{ font-size: 12px; }
           .k{ color:#555; font-size: 11px; }
           .v{ font-weight: 650; }
           table{ width:100%; border-collapse: collapse; border:1px solid #ddd; border-radius:12px; overflow:hidden; }
           th,td{ border-bottom:1px solid #eee; padding:8px; font-size: 12px; vertical-align: top; }
-          th{ background:#f6f6f6; text-align:left; }
+          th{ background:#c8102e; color:#fff; text-align:left; }
           tr:last-child td{ border-bottom:none; }
+          tr:nth-child(even){ background:#fafafa; }
           .photo-grid{ display:grid; grid-template-columns: repeat(4, 1fr); gap:10px; }
           @media (max-width: 900px){ .photo-grid{ grid-template-columns: repeat(2, 1fr);} }
           .thumbs-print{ display:flex; flex-wrap:wrap; gap:6px; }
           .thumbs-print img{ width:56px; height:56px; object-fit:cover; border:1px solid #ccc; border-radius:10px; }
           .no-print{ margin-bottom: 12px; }
-          .btn{ border:1px solid #ddd; background:#fff; padding: 10px 12px; border-radius: 12px; font-weight: 650; cursor:pointer; }
-          @media print{ .no-print{ display:none; } body{ margin:0; } }
+          .btn{ border:1px solid #c8102e; background:#fff; color:#c8102e; padding: 10px 12px; border-radius: 12px; font-weight: 650; cursor:pointer; }
+          .btn:hover{ background:#c8102e; color:#fff; }
+          .footer{ margin-top:20px; padding-top:12px; border-top:2px solid #c8102e; text-align:center; font-size:11px; color:#555; }
+          .footer strong{ color:#c8102e; }
+          @media print{ .no-print{ display:none; } body{ margin:0; padding:12px; } }
         </style>
       </head>
       <body>
         <div class="no-print">
-          <button class="btn" onclick="window.print()">Drucken / als PDF speichern</button>
+          <button class="btn" onclick="window.print()">🖨️ Drucken / als PDF speichern</button>
         </div>
 
-        <h1>Fahrzeugzustandsprotokoll (${escapeHtml(data.process)})</h1>
-        <div class="sub">Datum ${escapeHtml(data.date)} um ${escapeHtml(data.time)} - Standort: ${escapeHtml(data.location)}</div>
-
-        <div class="box">
-          <div class="grid">
-            <div class="kv" style="grid-column: span 6;"><div class="k">Unternehmen</div><div class="v">${escapeHtml(data.company || "-")}</div></div>
-            <div class="kv" style="grid-column: span 6;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
-
-            <div class="kv" style="grid-column: span 4;"><div class="k">Kunde/Fahrer</div><div class="v">${escapeHtml(data.customer || "-")}</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Kennzeichen</div><div class="v">${escapeHtml(data.plate)}</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Marke/Modell</div><div class="v">${escapeHtml(data.model)}</div></div>
-
-            <div class="kv" style="grid-column: span 4;"><div class="k">FIN/VIN</div><div class="v">${escapeHtml(data.vin || "-")}</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Farbe</div><div class="v">${escapeHtml(data.color || "-")}</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Schlüssel</div><div class="v">${escapeHtml(data.keys)}</div></div>
-
-            <div class="kv" style="grid-column: span 4;"><div class="k">Kilometerstand</div><div class="v">${escapeHtml(data.mileage)} km</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Tank/Batterie</div><div class="v">${escapeHtml(data.fuel)} %</div></div>
-            <div class="kv" style="grid-column: span 4;"><div class="k">Zubehör/Dokumente</div><div class="v">${escapeHtml(accText)}</div></div>
-
-            <div class="kv" style="grid-column: span 12;"><div class="k">Bemerkungen</div><div class="v" style="font-weight:500;">${escapeHtml(data.notesGeneral || "-")}</div></div>
+        <div class="header">
+          <img src="${almasLogoBase64}" alt="ALMAS INDUSTRIES">
+          <div class="header-text">
+            <h1>Fahrzeugzustandsprotokoll</h1>
+            <div class="sub">${escapeHtml(data.process)} | ${escapeHtml(data.date)} um ${escapeHtml(data.time)}<br>Standort: ${escapeHtml(data.location)}</div>
           </div>
         </div>
 
         <div class="box">
-          <div style="font-weight:800; margin-bottom:8px;">Sichtprüfung außen</div>
+          <div class="grid">
+            <div class="kv" style="grid-column: span 6;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
+            <div class="kv" style="grid-column: span 6;"><div class="k">Kunde/Fahrer</div><div class="v">${escapeHtml(data.customer || "-")}</div></div>
+
+            <div class="kv" style="grid-column: span 4;"><div class="k">Kennzeichen</div><div class="v">${escapeHtml(data.plate)}</div></div>
+            <div class="kv" style="grid-column: span 4;"><div class="k">Marke/Modell</div><div class="v">${escapeHtml(data.model)}</div></div>
+            <div class="kv" style="grid-column: span 4;"><div class="k">Kilometerstand</div><div class="v">${escapeHtml(data.mileage)} km</div></div>
+
+            <div class="kv" style="grid-column: span 6;"><div class="k">Zubehör/Dokumente</div><div class="v">${escapeHtml(accText)}</div></div>
+            <div class="kv" style="grid-column: span 6;"><div class="k">Bemerkungen</div><div class="v" style="font-weight:500;">${escapeHtml(data.notesGeneral || "-")}</div></div>
+          </div>
+        </div>
+
+        <div class="box">
+          <div class="box-title">Sichtprüfung außen</div>
           <table>
             <thead><tr><th style="width:28%;">Bereich</th><th style="width:14%;">Zustand</th><th>Bemerkung</th><th style="width:22%;">Foto(s)</th></tr></thead>
             <tbody>${rowsToHtml(data.exterior)}</tbody>
@@ -1231,7 +1328,7 @@
         </div>
 
         <div class="box">
-          <div style="font-weight:800; margin-bottom:8px;">Sichtprüfung innen</div>
+          <div class="box-title">Sichtprüfung innen</div>
           <table>
             <thead><tr><th style="width:28%;">Bereich</th><th style="width:14%;">Zustand</th><th>Bemerkung</th><th style="width:22%;">Foto(s)</th></tr></thead>
             <tbody>${rowsToHtml(data.interior)}</tbody>
@@ -1239,17 +1336,17 @@
         </div>
 
         <div class="box">
-          <div style="font-weight:800; margin-bottom:8px;">Schadensliste</div>
+          <div class="box-title">Schadensliste</div>
           ${damageToHtml(data.damage)}
         </div>
 
         <div class="box">
-          <div style="font-weight:800; margin-bottom:8px;">Pflichtfotos</div>
+          <div class="box-title">Pflichtfotos</div>
           <div class="photo-grid">${photoGridHtml}</div>
         </div>
 
         <div class="box">
-          <div style="font-weight:800; margin-bottom:8px;">Unterschriften</div>
+          <div class="box-title">Unterschriften</div>
           <div class="grid">
             <div style="grid-column: span 6;">
               <div class="k">Mitarbeiter</div>
@@ -1262,7 +1359,11 @@
           </div>
         </div>
 
-        <div class="sub">Erstellt mit dem interaktiven Fahrzeugzustandsprotokoll.</div>
+        <div class="footer">
+          <strong>ALMAS INDUSTRIES AG</strong><br>
+          Floßwörthstraße 57 | D-68199 Mannheim<br>
+          Tel.: +49 (0) 621 / 842 528 – 0 | www.totmann-schalter.de
+        </div>
       </body>
       </html>
       `;
@@ -1302,50 +1403,58 @@
       w.focus();
     }
 
+    // n8n Webhook URL
+    const WEBHOOK_URL = "https://automatisierung.almachatbot.de/webhook/fahrzeugprotokoll";
+
     async function sendProtocol(){
       if(!validateForm()) return;
 
       const { html, data } = await buildReportHtml();
-      const json = JSON.stringify(data, null, 2);
+      
+      // Show loading state
+      const btnSend = document.getElementById('btnSend');
+      const originalText = btnSend.textContent;
+      btnSend.textContent = "Wird gesendet...";
+      btnSend.disabled = true;
+      showMessage("📤 Protokoll wird übertragen... Bitte warten.", "ok");
 
-      const safePlate = (data.plate || "fahrzeug").replace(/[^a-z0-9\-]+/gi,'_');
-      const baseName = `fahrzeugprotokoll_${safePlate}_${(data.date||'').replace(/\./g,'-')}`;
+      try {
+        const response = await fetch(WEBHOOK_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(data)
+        });
 
-      const htmlFile = new File([html], `${baseName}.html`, {type: "text/html"});
-      const jsonFile = new File([json], `${baseName}.json`, {type: "application/json"});
-      const shareText = `${data.process} – ${data.plate} – ${data.date} ${data.time} (${data.location})`;
-
-      // Preferred: native share sheet (mobile)
-      if(navigator.share){
-        try{
-          if(!navigator.canShare || navigator.canShare({files:[htmlFile, jsonFile]})){
-            await navigator.share({
-              title: "Fahrzeugzustandsprotokoll",
-              text: shareText,
-              files: [htmlFile, jsonFile]
-            });
-            showMessage("Senden/Teilen wurde gestartet (Share-Menü).", "ok");
-            return;
-          }
-        }catch(err){
-          // fall back to download
-          console.warn("Share failed:", err);
+        if (!response.ok) {
+          throw new Error(`Server-Fehler: ${response.status}`);
         }
+
+        const result = await response.json();
+        
+        if (result.success) {
+          showMessage(`✅ <b>Protokoll erfolgreich gesendet!</b><br>
+            📁 <a href="${result.driveLink}" target="_blank">Fotos in Google Drive öffnen</a><br>
+            📧 E-Mail wurde versendet.`, "ok");
+        } else {
+          throw new Error(result.message || "Unbekannter Fehler");
+        }
+
+      } catch (err) {
+        console.error("Send error:", err);
+        showMessage(`❌ <b>Fehler beim Senden:</b> ${err.message}<br>
+          Bitte versuchen Sie es erneut oder nutzen Sie die <b>Druckansicht / PDF</b> Funktion.`, "error");
+        
+        // Fallback: offer download
+        const safePlate = (data.plate || "fahrzeug").replace(/[^a-z0-9\-]+/gi,'_');
+        const baseName = `fahrzeugprotokoll_${safePlate}_${(data.date||'').replace(/\./g,'-')}`;
+        downloadFile(`${baseName}.html`, html, "text/html");
+        downloadFile(`${baseName}.json`, JSON.stringify(data, null, 2), "application/json");
+      } finally {
+        btnSend.textContent = originalText;
+        btnSend.disabled = false;
       }
-
-      // Fallback: download files + open mail client
-      downloadFile(`${baseName}.html`, html, "text/html");
-      downloadFile(`${baseName}.json`, json, "application/json");
-
-      try{
-        const subject = encodeURIComponent(`Fahrzeugzustandsprotokoll ${data.plate}`);
-        const body = encodeURIComponent(
-          `Hallo,\n\nanbei das Fahrzeugzustandsprotokoll.\n\n${shareText}\n\nHinweis: Der Browser hat HTML-Report + JSON heruntergeladen. Bitte als Anhang hinzufügen.\n`
-        );
-        window.location.href = `mailto:?subject=${subject}&body=${body}`;
-      }catch(e){}
-
-      showMessage("Teilen wird von diesem Browser nicht unterstützt. Es wurden stattdessen <b>HTML-Report</b> + <b>JSON</b> heruntergeladen (zum manuellen Versenden/Upload).", "ok");
     }
 
     // Signature pads (simple, no external libs)
