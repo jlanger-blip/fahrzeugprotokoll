@@ -549,13 +549,17 @@
           <input id="location" type="text" placeholder="z.B. Berlin Mitte" required>
         </div>
 
-        <div class="field" style="grid-column: span 6;">
+        <div class="field" style="grid-column: span 4;">
           <label for="employee">Mitarbeiter *</label>
           <input id="employee" type="text" placeholder="Vorname Nachname" required>
         </div>
         <div class="field" style="grid-column: span 4;">
           <label for="customer">Kunde / Fahrer (optional)</label>
           <input id="customer" type="text" placeholder="Vorname Nachname">
+        </div>
+        <div class="field" style="grid-column: span 4;">
+          <label for="customerEmail">E-Mail Fahrer (optional)</label>
+          <input id="customerEmail" type="email" placeholder="fahrer@beispiel.de">
         </div>
       </div>
 
@@ -1093,6 +1097,7 @@
         company: getValue('company'),
         employee: getValue('employee'),
         customer: getValue('customer'),
+        customerEmail: getValue('customerEmail'),
         plate: getValue('plate'),
         model: getValue('model'),
         vin: getValue('vin'),
@@ -1266,8 +1271,9 @@
 
         <div class="box">
           <div class="grid">
-            <div class="kv" style="grid-column: span 6;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
-            <div class="kv" style="grid-column: span 6;"><div class="k">Kunde/Fahrer</div><div class="v">${escapeHtml(data.customer || "-")}</div></div>
+            <div class="kv" style="grid-column: span 4;"><div class="k">Mitarbeiter</div><div class="v">${escapeHtml(data.employee)}</div></div>
+            <div class="kv" style="grid-column: span 4;"><div class="k">Kunde/Fahrer</div><div class="v">${escapeHtml(data.customer || "-")}</div></div>
+            <div class="kv" style="grid-column: span 4;"><div class="k">E-Mail Fahrer</div><div class="v">${escapeHtml(data.customerEmail || "-")}</div></div>
 
             <div class="kv" style="grid-column: span 4;"><div class="k">Kennzeichen</div><div class="v">${escapeHtml(data.plate)}</div></div>
             <div class="kv" style="grid-column: span 4;"><div class="k">Marke/Modell</div><div class="v">${escapeHtml(data.model)}</div></div>
