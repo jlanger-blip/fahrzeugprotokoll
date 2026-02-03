@@ -996,13 +996,15 @@
       el.classList.toggle('error', !!bad);
     }
 
-    function showMessage(text, kind){
+    function showMessage(text, kind, scroll = false){
       const box = document.getElementById('messages');
       box.classList.remove('error','ok');
       if(kind === 'error') box.classList.add('error');
       if(kind === 'ok') box.classList.add('ok');
       box.innerHTML = text;
-      box.scrollIntoView({behavior:'smooth', block:'center'});
+      if(scroll || kind === 'error') {
+        box.scrollIntoView({behavior:'smooth', block:'center'});
+      }
     }
 
     function getValue(id){
