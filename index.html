@@ -1090,7 +1090,7 @@
       let ok = true;
 
       // Pflichtfelder (Stammdaten)
-      const requiredIds = ['process','date','time','location','employee','plate','model','mileage','fuel','keys'];
+      const requiredIds = ['process','date','time','location','employee','plate','model','mileage'];
       requiredIds.forEach(id=>{
         const el = document.getElementById(id);
         const bad = !el.value;
@@ -1165,11 +1165,7 @@
         employeeEmail: getValue('employeeEmail'),
         plate: getValue('plate'),
         model: getValue('model'),
-        vin: getValue('vin'),
-        color: getValue('color'),
         mileage: getValue('mileage'),
-        fuel: getValue('fuel'),
-        keys: getValue('keys'),
         notesGeneral: getValue('notesGeneral'),
         exterior: [],
         interior: [],
