@@ -9,6 +9,7 @@ SERVICE_ACCOUNT_FILE = "/root/.openclaw/workspace/google-service-account.json"
 # Email-Empfänger
 EMAIL_RECIPIENTS = [
     "j.langer@almas-industries.com",
+    "j.langer@almas-industries.de",
     "b.berlik@almas-industries.com"
 ]
 
