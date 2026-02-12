@@ -1127,11 +1127,6 @@
     }
 
     function validateForm(){
-      // TESTMODUS: Validierung deaktiviert
-      showMessage("Testmodus: Validierung übersprungen.", "ok");
-      return true;
-      
-      /* ORIGINAL (wieder aktivieren für Produktion):
       let ok = true;
 
       // Pflichtfelder (Stammdaten)
@@ -1177,7 +1172,6 @@
 
       showMessage("Alles ok. Du kannst jetzt <b>Senden</b> oder die <b>Druckansicht / PDF</b> öffnen.", "ok");
       return true;
-      */
     }
 
     function fmtDateISOToDE(iso){
