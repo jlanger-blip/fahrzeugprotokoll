@@ -2,7 +2,7 @@
 """
 Fahrzeugprotokoll - Kompletter Workflow
 1. Empfängt Protokoll-Daten
-2. Lädt Fotos nach Kennzeichen sortiert zu Google Drive
+2. Lädt Fotos nach Kennzeichen sortiert zu Google Drive (via gog OAuth)
 3. Sendet Email mit Link an Empfänger
 """
 
@@ -12,29 +12,27 @@ import json
 import base64
 import re
 import smtplib
+import subprocess
+import tempfile
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime
 from pathlib import Path
+from io import BytesIO
 
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaInMemoryUpload
+import weasyprint
 
 from config import (
-    PARENT_FOLDER_ID, SERVICE_ACCOUNT_FILE,
-    EMAIL_RECIPIENTS, SMTP_SERVER, SMTP_PORT, 
+    PARENT_FOLDER_ID,
+    EMAIL_TO, EMAIL_BCC, SMTP_SERVER, SMTP_PORT, 
     SMTP_USER, SMTP_PASSWORD, SMTP_FROM
 )
 
-
-def get_drive_service():
-    """Google Drive Service mit Service Account."""
-    creds = service_account.Credentials.from_service_account_file(
-        SERVICE_ACCOUNT_FILE, 
-        scopes=['https://www.googleapis.com/auth/drive']
-    )
-    return build('drive', 'v3', credentials=creds)
+# GOG OAuth Account
+GOG_ACCOUNT = "planungalmastest@gmail.com"
+os.environ["GOG_KEYRING_PASSWORD"] = "lexibot2026"
 
 
 def sanitize_filename(name):
@@ -42,149 +40,331 @@ def sanitize_filename(name):
     return re.sub(r'[<>:"/\\|?*]', '_', name).strip()
 
 
-def find_or_create_folder(service, name, parent_id):
-    """Findet einen Ordner oder erstellt ihn."""
-    query = f"name='{name}' and '{parent_id}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false"
-    results = service.files().list(q=query, fields="files(id, name)").execute()
-    files = results.get('files', [])
-    
-    if files:
-        return files[0]['id']
-    
-    file_metadata = {
-        'name': name,
-        'mimeType': 'application/vnd.google-apps.folder',
-        'parents': [parent_id]
-    }
-    folder = service.files().create(body=file_metadata, fields='id').execute()
-    return folder.get('id')
+def find_folder(name, parent_id):
+    """Sucht einen Ordner nach Name im Parent."""
+    result = subprocess.run(
+        ["/usr/local/bin/gog", "drive", "ls", parent_id, "--account", GOG_ACCOUNT],
+        capture_output=True, text=True
+    )
+    for line in result.stdout.strip().split('\n')[1:]:  # Skip header
+        if not line.strip():
+            continue
+        parts = line.split('\t')
+        if len(parts) >= 3 and parts[1].strip() == name and parts[2].strip() == 'folder':
+            return parts[0].strip()
+    return None
 
 
-def upload_base64_image(service, folder_id, filename, base64_data):
-    """Lädt ein Base64-Bild hoch."""
-    if ',' in base64_data:
-        base64_data = base64_data.split(',', 1)[1]
+def create_folder(name, parent_id):
+    """Erstellt einen Ordner."""
+    result = subprocess.run(
+        ["/usr/local/bin/gog", "drive", "mkdir", name, "--parent", parent_id, "--account", GOG_ACCOUNT, "--json"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise Exception(f"mkdir error: {result.stderr}")
+    data = json.loads(result.stdout)
+    return data.get("id")
+
+
+def find_or_create_folder(name, parent_id):
+    """Findet oder erstellt einen Ordner."""
+    folder_id = find_folder(name, parent_id)
+    if folder_id:
+        return folder_id
+    return create_folder(name, parent_id)
+
+
+def upload_file(filepath, parent_id, filename=None):
+    """Lädt eine Datei hoch."""
+    result = subprocess.run(
+        ["/usr/local/bin/gog", "drive", "upload", filepath, "--parent", parent_id, "--account", GOG_ACCOUNT, "--json"],
+        capture_output=True, text=True
+    )
+    if result.returncode != 0:
+        raise Exception(f"upload error: {result.stderr}")
+    data = json.loads(result.stdout)
+    file_id = data.get("id")
+    
+    # Rename wenn gewünscht
+    if filename and file_id:
+        subprocess.run(
+            ["/usr/local/bin/gog", "drive", "rename", file_id, filename, "--account", GOG_ACCOUNT],
+            capture_output=True
+        )
+    
+    return file_id, f"https://drive.google.com/file/d/{file_id}/view"
+
+
+def upload_base64_image(folder_id, filename, data_url):
+    """Lädt ein Base64-kodiertes Bild hoch."""
+    # Extrahiere Daten aus data URL
+    if ',' in data_url:
+        header, b64data = data_url.split(',', 1)
+    else:
+        b64data = data_url
     
     try:
-        image_bytes = base64.b64decode(base64_data)
+        image_data = base64.b64decode(b64data)
     except Exception as e:
-        print(f"  ⚠️ Fehler: {filename}: {e}")
+        print(f"  ⚠️ Base64 Fehler: {filename}: {e}")
         return None
     
-    file_metadata = {'name': filename, 'parents': [folder_id]}
-    media = MediaInMemoryUpload(image_bytes, mimetype='image/jpeg')
+    # Speichere temporär
+    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as f:
+        f.write(image_data)
+        temp_path = f.name
     
-    file = service.files().create(
-        body=file_metadata, media_body=media,
-        fields='id, webViewLink'
-    ).execute()
-    return file
+    try:
+        file_id, link = upload_file(temp_path, folder_id, filename)
+        return {"id": file_id, "webViewLink": link}
+    except Exception as e:
+        print(f"  ⚠️ Upload Fehler: {filename}: {e}")
+        return None
+    finally:
+        os.unlink(temp_path)
+
+
+def upload_json(folder_id, filename, data):
+    """Lädt JSON-Daten als Datei hoch."""
+    json_content = json.dumps(data, indent=2, ensure_ascii=False)
+    
+    with tempfile.NamedTemporaryFile(suffix='.json', delete=False, mode='w', encoding='utf-8') as f:
+        f.write(json_content)
+        temp_path = f.name
+    
+    try:
+        file_id, link = upload_file(temp_path, folder_id, filename)
+        return file_id
+    finally:
+        os.unlink(temp_path)
+
+
+def generate_html_report(data):
+    """Generiert HTML-Report mit allen Formulardaten inkl. eingebetteter Bilder."""
+    plate = data.get('plate', '-')
+    date = data.get('date', '-')
+    time = data.get('time', '-')
+    process = data.get('process', '-')
+    employee = data.get('employee', '-')
+    employee_email = data.get('employeeEmail', '-')
+    model = data.get('model', '-')
+    mileage = data.get('mileage', '-')
+    location = data.get('location', '-')
+    remarks = data.get('remarks', '-') or '-'
+    
+    # Helper: Fotos als HTML-Bilder
+    def photos_to_html(photos):
+        if not photos:
+            return ""
+        html = '<div class="photos">'
+        for p in photos:
+            if p:  # dataUrl vorhanden
+                html += f'<img src="{p}" style="max-width:200px; max-height:150px; margin:5px; border:1px solid #ccc;">'
+        html += '</div>'
+        return html
+    
+    # Sichtprüfung außen mit Fotos
+    exterior_rows = ""
+    for item in data.get('exterior', []):
+        area = item.get('area', '-')
+        status = item.get('status', '-')
+        comment = item.get('comment', '-') or '-'
+        photos = item.get('photos', [])
+        photos_html = photos_to_html(photos)
+        exterior_rows += f"<tr><td>{area}</td><td>{status}</td><td>{comment}</td><td>{photos_html}</td></tr>"
+    
+    # Sichtprüfung innen mit Fotos
+    interior_rows = ""
+    for item in data.get('interior', []):
+        area = item.get('area', '-')
+        status = item.get('status', '-')
+        comment = item.get('comment', '-') or '-'
+        photos = item.get('photos', [])
+        photos_html = photos_to_html(photos)
+        interior_rows += f"<tr><td>{area}</td><td>{status}</td><td>{comment}</td><td>{photos_html}</td></tr>"
+    
+    # Schäden mit Fotos
+    damage_rows = ""
+    for d in data.get('damage', []):
+        area = d.get('area', '-')
+        desc = d.get('description', '-') or '-'
+        photos = d.get('photos', [])
+        photos_html = photos_to_html(photos)
+        damage_rows += f"<tr><td>{area}</td><td>{desc}</td><td>{photos_html}</td></tr>"
+    
+    # Pflichtfotos
+    pflicht_photos_html = ""
+    for photo in data.get('photos', []):
+        title = photo.get('title', '')
+        data_url = photo.get('dataUrl', '')
+        if data_url:
+            pflicht_photos_html += f'''
+            <div style="display:inline-block; margin:10px; text-align:center;">
+                <img src="{data_url}" style="max-width:200px; max-height:150px; border:1px solid #ccc;">
+                <br><small>{title}</small>
+            </div>'''
+    
+    # Almas Logo als Base64 SVG
+    almas_logo_b64 = "PHN2ZyBpZD0iQ2FscXVlXzEiIGRhdGEtbmFtZT0iQ2FscXVlIDEiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyIgdmlld0JveD0iMCAwIDUzMS4zMiAxMDQuNzQiPjx0aXRsZT5sb2dvX2FsbWFzX2hvcml6b250YWw8L3RpdGxlPjxwYXRoIGQ9Ik0yNzEuOTEsNzMuNDNsMTUuNjQsMzIuMzhoLTkuMDhsLTIuNzUtNi4xSDI1OS4xMmwtMi43NSw2LjFoLTguODVsMTUuNjQtMzIuMzhaTTI2MS43Myw5NGgxMS4zOHMtNS4zNy0xMS42LTUuNjQtMTMuMTJDMjY3LjE5LDgxLjgyLDI2MS43Myw5NCwyNjEuNzMsOTRaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzguNjIgLTcyLjQyKSIgc3R5bGU9ImZpbGw6IzFlMWYxZCIvPjxwYXRoIGQ9Ik0yOTkuMjksNzMuNDNWOTkuODVoMTh2NmgtMjYuMVY3My40M1oiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zOC42MiAtNzIuNDIpIiBzdHlsZT0iZmlsbDojMWUxZjFkIi8+PHBhdGggZD0iTTM2NS4wNiwxMDUuODFoLTcuN2wuMTQtMjIuNjZhMTYuNTIsMTYuNTIsMCwwLDEsLjIzLTNjLS4yNy44Mi0uNTksMS42NS0uOTIsMi40N2wtOS42OCwyMy4yMWgtNy4zOEwzMzAuMSw4My4wNmMtLjI0LS41NS0uNDEtMS4wNi0uNi0xLjU2cy0uMjctLjkxLS40Mi0xLjM3Yy4wOSwxLC4xOSwxLjkyLjI0LDIuODhsLjA5LDIyLjhoLTcuN1Y3My40M2gxMS43NWw4LjQsMTkuODZhMjQuMjUsMjQuMjUsMCwwLDEsMS42NSw0Ljc3QTIzLjgsMjMuOCwwLDAsMSwzNDUsOTMuNjFsOC40NC0yMC4xOGgxMS42WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNMzkzLjI1LDczLjQzbDE1LjY0LDMyLjM4aC05LjA4bC0yLjc1LTYuMUgzODAuNDVsLTIuNzUsNi4xaC04Ljg1bDE1LjY0LTMyLjM4Wk0zODMuMDYsOTRoMTEuMzhzLTUuMzctMTEuNi01LjY0LTEzLjEyQzM4OC41Miw4MS44MiwzODMuMDYsOTQsMzgzLjA2LDk0WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNNDM2LjMxLDgyLjFhNS4xNiw1LjE2LDAsMCwwLS43NC0xLjA1Yy0yLTIuMzMtNS43OC0yLjg0LTguNjItMi44NGExNy40OSwxNy40OSwwLDAsMC0yLjcxLjE5Yy0uMjcsMC00LjU0LjM3LTQuNTQsMy41NywwLDEuNjUsMS4xNSwyLjM0LDIuNTcsMi44LDIuMjkuNjgsOC4wNywxLjUxLDEwLjQxLDJhMjkuNTIsMjkuNTIsMCwwLDEsNC40LDFjMS44OC42NSw2LjUyLDIuMjksNi41Miw4LjMsMCwyLjk0LTEuMDUsNy41Ny03LjY2LDkuNjhhMjYuODQsMjYuODQsMCwwLDEtNS4zNywxYy0xLjE1LjA5LTIuMjkuMTQtMy40NC4xNC01Ljc4LDAtOS0xLjE5LTExLjI5LTIuNDRhMTQuNDgsMTQuNDgsMCwwLDEtNS42NC01LjMyLDEwLjcxLDEwLjcxLDAsMCwxLS43OC0xLjM4bDcuMzktMS44OGMxLjkyLDQsNi45Myw1LjA1LDEwLjg3LDUuMDUuMzMsMCw0LjQsMCw2LjYxLTEuNDdhMy40NCwzLjQ0LDAsMCwwLDEuNTYtMi44LDIuNjEsMi42MSwwLDAsMC0xLjA2LTIuMTZjLTEtLjc4LTMuMTItMS4wOS02LjA1LTEuNTUtNi0uOTItOS4xNy0xLjM3LTExLjc5LTIuNjJhOC40Miw4LjQyLDAsMCwxLTUuMDktNy43LDguNjcsOC42NywwLDAsMSwzLjk0LTcuMzRjMi4wNy0xLjQyLDUuNDItMi44LDExLjE5LTIuOCw1LjUxLDAsOC40NCwxLDEwLjczLDIuMDZhMTMuODIsMTMuODIsMCwwLDEsNCwyLjc1LDEzLjY3LDEzLjY3LDAsMCwxLDIuMiwyLjk0WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNMjUwLjU0LDExOS41MnYzMS43aC0zdi0zMS43WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNMjkyLjEsMTUxLjIyaC0yLjgybC0yNy4xNi0yNy42NnYyNy42NmgtMi44M3YtMzEuN2gyLjgzbDI3LjE2LDI3Ljc5VjExOS41MmgyLjgyWiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNMzE3LjI0LDExOS41MmMuOTQsMCwxLjg4LDAsMi44Mi4wOWExNC4xMywxNC4xMywwLDAsMSw4LjM1LDMuMTljNS4xMiw0LjIyLDUuMzksMTAuNjksNS4zOSwxMi42N2ExOS42MiwxOS42MiwwLDAsMS0uNjMsNC45NCwxMy44NiwxMy44NiwwLDAsMS03LjQ1LDkuMmMtMy4yMywxLjQ4LTYuNTUsMS41OC0xMCwxLjYySDMwMS4zOXYtMzEuN1ptLTEyLjcxLDI5aDEwLjFjNC4yNywwLDkuMDctLjA5LDEyLjM5LTMuMjMsMS43MS0xLjYyLDMuNTktNC40OSwzLjU5LTkuN1MzMjguMzcsMTI1LDMyMywxMjNhMTUuOTEsMTUuOTEsMCwwLDAtNS43OS0uOUgzMDQuNTNaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzguNjIgLTcyLjQyKSIgc3R5bGU9ImZpbGw6IzFlMWYxZCIvPjxwYXRoIGQ9Ik0zNzIuNTgsMTE5LjUydjE5YTE0Ljc4LDE0Ljc4LDAsMCwxLTEuODksNy44MWMtMS44NCwzLTQuNjIsNC4zNS03Ljk1LDUuMTJhMjYuNjksMjYuNjksMCwwLDEtNS44OC41OCwyOS43MSwyOS43MSwwLDAsMS03LjgxLS45NCwxMSwxMSwwLDAsMS03Ljc3LTYuODMsMTkuMzksMTkuMzksMCwwLDEtLjgtNi40MlYxMTkuNTJoMi45MnYxNy4wNmMwLDMtLjEzLDYsMS43MSw4LjU3LDEuNjEsMi4yNSw0Ljg5LDQsMTAuNzMsNCw3LjEzLDAsMTAuNjUtMS4zOSwxMi41My00LjY3LDEuMDgtMS44OSwxLjM1LTQsMS4zNS04LjIyVjExOS41MloiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zOC42MiAtNzIuNDIpIiBzdHlsZT0iZmlsbDojMWUxZjFkIi8+PHBhdGggZD0iTTQwOC41NCwxMjYuNDNjLS4yNy0uMzYtLjYzLS44MS0uOTUtMS4xNy0yLjkxLTMtNy4yNy0zLjg2LTExLjI3LTMuODYtLjksMC01LjA3LDAtOC4yMSwxLjgzYTYuNDksNi40OSwwLDAsMC0yLjMzLDIuMjZhNC41OSw0LjU5LDAsMCwwLS41OSwyLjI0LDMuNzUsMy43NSwwLDAsMCwyLjQ3LDMuNDFjMS4zNS42MywyLjg3Ljg1LDUuODgsMS4yNiw2LjkyLDEsMTEuMzIsMS40NCwxNC4xLDIuNjVhNy4yNCw3LjI0LDAsMCwxLDQuNzIsNi43NCw4LjU2LDguNTYsMCwwLDEtMS40OCw0LjcxYy0yLDIuODctNi4yNCw1LjUyLTE0LDUuNTItLjg5LDAtMS43OS0uMDUtMi43NC0uMDktMS4zNS0uMDgtOC0uNC0xMS45NC00LjYyYTE3LjQzLDE3LjQzLDAsMCwxLTIuNjktNGwzLjMyLTEuMjZhOS45NCw5Ljk0LDAsMCwwLDMuNzcsNC44OWMxLjg1LDEuMjIsNSwyLjM0LDEwLjA2LDIuMzQsMS4yMSwwLDUuNTcsMCw5LjA3LTIuMDcsMS45My0xLjE3LDMuMzctMi44NywzLjM3LTUuMjFhNC4xNCw0LjE0LDAsMCwwLTEuNDktMy4zMmMtMi0xLjY3LTcuNC0yLjI1LTkuNzQtMi41Ni0xLjkzLS4yNy0zLjg2LS40OS01Ljc1LS43NmEyMi40OCwyMi40OCwwLDAsMS02LjM3LTEuNTcsNi40OCw2LjQ4LDAsMCwxLTMuNzctNS44OCw4LjMsOC4zLDAsMCwxLDQuNTMtN2MyLjgzLTEuNTYsNi44Ny0yLjE1LDEwLjA2LTIuMTUsMS45MywwLDcuOTQuMTQsMTIuNyw0YTE1LjE1LDE1LjE1LDAsMCwxLDIuMTUsMi4yWiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNNDQ0LjM1LDExOS41MnYyLjZoLTEzLjZ2MjkuMDloLTNWMTIyLjEySDQxMy41MXYtMi42WiIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoLTM4LjYyIC03Mi40MikiIHN0eWxlPSJmaWxsOiMxZTFmMWQiLz48cGF0aCBkPSJNNDgyLjUxLDE1MS4yMmgtNC4yNmwtMTIuNTMtMTQuMTRoLTE0LjV2MTQuMTRoLTMuMDZ2LTMxLjdoMjEuOTFjLjc2LDAsMS41MywwLDIuMywwLDEuMywwLDUsLjIyLDcuMjcsMy42M2E5LjI3LDkuMjcsMCwwLDEsMS4zOSw1LDguMzYsOC4zNiwwLDAsMS0zLjIyLDYuODJjLTIuMzksMS43NS01LjI2LDEuODktOCwyWm0tMzEuMjktMTYuODRoMTdjLjcyLDAsMS4zOSwwLDIuMTEsMCwyLjY1LS4xNCw1LjMtLjU4LDYuNjUtMy4yM2E3LjE4LDcuMTgsMCwwLDAsLjcyLTMuMDUsNi4wOSw2LjA5LDAsMCwwLTIuNDMtNC45Yy0xLjU3LTEtMy4zMi0xLTUuMTItMUg0NTEuMjJaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzguNjIgLTcyLjQyKSIgc3R5bGU9ImZpbGw6IzFlMWYxZCIvPjxwYXRoIGQ9Ik00OTIuMjgsMTE5LjUydjMxLjdoLTN2LTMxLjdaIiB0cmFuc2Zvcm09InRyYW5zbGF0ZSgtMzguNjIgLTcyLjQyKSIgc3R5bGU9ImZpbGw6IzFlMWYxZCIvPjxwYXRoIGQ9Ik01MzEuMzksMTE5LjUydjIuNkg1MDQuMTN2MTEuMTNoMjUuMTlWMTM2SDUwNC4xM3YxMi42MmgyOC41NnYyLjY1SDUwMXYtMzEuN1oiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zOC42MiAtNzIuNDIpIiBzdHlsZT0iZmlsbDojMWUxZjFkIi8+PHBhdGggZD0iTTU2Ni4xMiwxMjYuNDNjLS4yNy0uMzYtLjYzLS44MS0uOTQtMS4xNy0yLjkyLTMtNy4yNy0zLjg2LTExLjI3LTMuODYtLjksMC01LjA4LDAtOC4yMiwxLjgzYTYuNjQsNi42NCwwLDAsMC0yLjM0LDIuMjYsNC43Nyw0Ljc3LDAsMCwwLS41OCwyLjI0LDMuNzYsMy43NiwwLDAsMCwyLjQ3LDMuNDFjMS4zNS42MywyLjg4Ljg1LDUuODgsMS4yNiw2LjkyLDEsMTEuMzIsMS40NCwxNC4xLDIuNjVhNy4yMyw3LjIzLDAsMCwxLDQuNzIsNi43NCw4LjU2LDguNTYsMCwwLDEtMS40OCw0LjcxYy0yLDIuODctNi4yNCw1LjUyLTE0LDUuNTItLjg5LDAtMS43OS0uMDUtMi43NC0uMDktMS4zNC0uMDgtOC0uNC0xMS45NC00LjYyYTE3LjA2LDE3LjA2LDAsMCwxLTIuNy00TDU0MC40LDE0MmE5Ljk0LDkuOTQsMCwwLDAsMy43Nyw0Ljg5YzEuODQsMS4yMiw1LDIuMzQsMTAuMDUsMi4zNCwxLjIxLDAsNS41NywwLDkuMDctMi4wNywxLjkyLTEuMTcsMy4zNy0yLjg3LDMuMzctNS4yMWE0LjE5LDQuMTksMCwwLDAtMS40OC0zLjMyYy0yLTEuNjctNy40MS0yLjI1LTkuNzQtMi41Ni0xLjkzLS4yNy0zLjg2LS40OS01Ljc1LS43NmEyMi41MiwyMi41MiwwLDAsMS02LjM3LTEuNTcsNi40OCw2LjQ4LDAsMCwxLTMuNzctNS44OCw4LjMsOC4zLDAsMCwxLDQuNTQtN2MyLjgyLTEuNTYsNi44Ni0yLjE1LDEwLjA2LTIuMTUsMS45MywwLDgsLjE0LDEyLjcsNGExNS41OSwxNS41OSwwLDAsMSwyLjE2LDIuMloiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zOC42MiAtNzIuNDIpIiBzdHlsZT0iZmlsbDojMWUxZjFkIi8+PHJlY3QgeD0iMjA5LjA4IiB5PSI5Ni43NSIgd2lkdGg9IjE5Ni41OSIgaGVpZ2h0PSI3Ljk5IiBzdHlsZT0iZmlsbDojZTQwMzJlIi8+PHBhdGggZD0iTTM4LjYyLDE2MS41M2wxNS40OSw2LjU4LS40LTMuODUtMi4zNS00LjY3LDUtMy4zMywxOS4yMS04LjQyLDkuNjQsMjcuNTRMMTExLDE2OWwtMi4xMS0yLjg2LTctMS4xOC0zLjQ1LTUuMDlMMTAxLDE0Ni4xM2wtLjgtNi44NywyNy42LTIuNC0uODgsNS4yOS0zLjI2LDcuMTEsMi4wOCw3LTMuNTMsMTUuNDUsMjYuNjEtLjMyLTEtMy4wNy01Ljg4LTIuMDYtMy4zLTQuNDJMMTQ5LDEzOS4yNmw1LjQyLS43Nyw5LTUuMTEsNi43NiwxMS4xMywxMC4zLDE0LjE3LDMuMTcsNy41OCwxMS42Niw1LjkxLDI0LjI4LS40Ni01LjgtNS4wNy04LjQ2LTEuMjktMTUtMzQuMTZjLS41MS00LjI5LTEuMzctMTIuODMtMS4zNy0xMi44M2wxNy40Ny0xMi42LDQuMzctNy40NCwxMS4zMS02Ljg3LDEuNTktNS0uMTgtMy41OGgtOC4ybC0zLjc0LTQuNThIMjA2LjJsLTYuMzEtLjctOC4xLS40NS0yLjg2LTMuNDRoLTIuNThsLTIuODYsMnYyLjg2bC0xLDIuNzYtNy44NCwzTDE2Ni45MSw4MmwtMjAuNzYsNEw5NC41OSw4MS4yOCw2Ny40NCw5OS42NmMtLjUzLjctNy4wNSwzMS4xOS03LjA1LDMxLjE5TDQ4LjA4LDE0MS4yN1oiIHRyYW5zZm9ybT0idHJhbnNsYXRlKC0zOC42MiAtNzIuNDIpIiBzdHlsZT0iZmlsbDojZTQwMzJlIi8+PC9zdmc+"
+    
+    html = f"""<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Fahrzeugprotokoll {plate}</title>
+    <style>
+        body {{ font-family: Arial, sans-serif; margin: 20px; }}
+        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 3px solid #e4032e; padding-bottom: 15px; }}
+        .logo {{ max-width: 200px; height: auto; }}
+        h1 {{ color: #1e1f1d; margin: 0; }}
+        h2 {{ color: #333; border-bottom: 2px solid #e4032e; padding-bottom: 5px; }}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+        th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
+        th {{ background-color: #f5f5f5; }}
+        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }}
+        .info-item {{ padding: 10px; background: #f9f9f9; }}
+        .label {{ font-weight: bold; color: #666; }}
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="data:image/svg+xml;base64,{almas_logo_b64}" class="logo" alt="ALMAS INDUSTRIES">
+        <h1>Fahrzeugzustandsprotokoll</h1>
+    </div>
+    
+    <h2>Allgemeine Angaben</h2>
+    <div class="info-grid">
+        <div class="info-item"><span class="label">Vorgang:</span> {process}</div>
+        <div class="info-item"><span class="label">Datum:</span> {date} um {time}</div>
+        <div class="info-item"><span class="label">Standort:</span> {location}</div>
+        <div class="info-item"><span class="label">Mitarbeiter:</span> {employee}</div>
+        <div class="info-item"><span class="label">E-Mail:</span> {employee_email}</div>
+    </div>
+    
+    <h2>Fahrzeugdaten</h2>
+    <div class="info-grid">
+        <div class="info-item"><span class="label">Kennzeichen:</span> {plate}</div>
+        <div class="info-item"><span class="label">Marke/Modell:</span> {model}</div>
+        <div class="info-item"><span class="label">Kilometerstand:</span> {mileage} km</div>
+    </div>
+    <p><strong>Bemerkungen:</strong> {remarks}</p>
+    
+    <h2>Sichtprüfung außen</h2>
+    <table>
+        <tr><th>Bereich</th><th>Zustand</th><th>Bemerkung</th><th>Fotos</th></tr>
+        {exterior_rows if exterior_rows else "<tr><td colspan='4'>Keine Einträge</td></tr>"}
+    </table>
+    
+    <h2>Sichtprüfung innen</h2>
+    <table>
+        <tr><th>Bereich</th><th>Zustand</th><th>Bemerkung</th><th>Fotos</th></tr>
+        {interior_rows if interior_rows else "<tr><td colspan='4'>Keine Einträge</td></tr>"}
+    </table>
+    
+    <h2>Schäden/Mängel</h2>
+    <table>
+        <tr><th>Bereich</th><th>Beschreibung</th><th>Fotos</th></tr>
+        {damage_rows if damage_rows else "<tr><td colspan='3'>Keine Schäden dokumentiert</td></tr>"}
+    </table>
+    
+    <h2>Pflichtfotos</h2>
+    {pflicht_photos_html if pflicht_photos_html else "<p>Keine Pflichtfotos vorhanden</p>"}
+    
+    <h2>Unterschrift Mitarbeiter</h2>
+    {f'<img src="{data.get("signatures", {}).get("employee", "")}" style="max-width:300px; border:1px solid #ccc;">' if data.get("signatures", {}).get("employee") else "<p>Keine Unterschrift</p>"}
+    
+    <p style="margin-top: 30px; color: #666; font-size: 12px;">
+        Erstellt am {date} um {time} | Fahrzeugprotokoll-System
+    </p>
+</body>
+</html>"""
+    return html
 
 
 def send_email(data, folder_link, uploaded_count):
-    """Sendet Email mit Protokoll-Zusammenfassung."""
+    """Sendet Email mit Protokoll-Zusammenfassung und PDF-Anhang."""
     plate = data.get('plate', 'Unbekannt')
     date = data.get('date', '-')
     time = data.get('time', '-')
     process = data.get('process', '-')
     employee = data.get('employee', '-')
-    customer = data.get('customer', '-')
-    customer_email = data.get('customerEmail', '')
     model = data.get('model', '-')
     mileage = data.get('mileage', '-')
     location = data.get('location', '-')
     
-    # Schäden sammeln
-    damages = data.get('damage', [])
-    damage_text = ""
-    if damages:
-        damage_text = "\n\n⚠️ SCHÄDEN DOKUMENTIERT:\n"
-        for i, d in enumerate(damages, 1):
-            damage_text += f"  {i}. {d.get('area', '-')}: {d.get('desc', '-')} ({d.get('size', '-')} cm)\n"
+    subject = f"Fahrzeugprotokoll: {plate} - {process} ({date})"
     
-    subject = f"🚗 Fahrzeugprotokoll: {plate} - {process} ({date})"
-    
-    html = f"""
-    <html>
-    <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
-        <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
-            <div style="background: linear-gradient(135deg, #c8102e, #8b0000); color: white; padding: 20px; border-radius: 10px 10px 0 0;">
-                <h1 style="margin: 0; font-size: 24px;">🚗 Fahrzeugprotokoll</h1>
-                <p style="margin: 5px 0 0; opacity: 0.9;">{process} - {date} um {time}</p>
-            </div>
-            
-            <div style="background: #f9f9f9; padding: 20px; border: 1px solid #ddd;">
-                <h2 style="color: #c8102e; margin-top: 0; font-size: 18px;">Fahrzeugdaten</h2>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Kennzeichen:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{plate}</td></tr>
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Marke/Modell:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{model}</td></tr>
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Kilometerstand:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{mileage} km</td></tr>
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Standort:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{location}</td></tr>
-                </table>
-                
-                <h2 style="color: #c8102e; margin-top: 20px; font-size: 18px;">Beteiligte</h2>
-                <table style="width: 100%; border-collapse: collapse;">
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Mitarbeiter:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{employee}</td></tr>
-                    <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee;"><strong>Kunde/Fahrer:</strong></td><td style="padding: 8px 0; border-bottom: 1px solid #eee;">{customer or '-'}</td></tr>
-                    <tr><td style="padding: 8px 0;"><strong>E-Mail Fahrer:</strong></td><td style="padding: 8px 0;">{customer_email or '-'}</td></tr>
-                </table>
-                
-                {"<div style='background: #fff3cd; border: 1px solid #ffc107; padding: 15px; border-radius: 5px; margin-top: 20px;'><h3 style='color: #856404; margin: 0 0 10px;'>⚠️ Schäden dokumentiert</h3>" + "".join([f"<p style='margin: 5px 0;'><strong>{d.get('area', '-')}:</strong> {d.get('desc', '-')} ({d.get('size', '-')} cm)</p>" for d in damages]) + "</div>" if damages else ""}
-            </div>
-            
-            <div style="background: #c8102e; color: white; padding: 20px; text-align: center; border-radius: 0 0 10px 10px;">
-                <p style="margin: 0 0 15px; font-size: 16px;">📁 <strong>{uploaded_count} Fotos</strong> wurden hochgeladen</p>
-                <a href="{folder_link}" style="display: inline-block; background: white; color: #c8102e; padding: 12px 30px; text-decoration: none; border-radius: 5px; font-weight: bold;">📂 Fotos in Google Drive öffnen</a>
-            </div>
-            
-            <p style="text-align: center; color: #888; font-size: 12px; margin-top: 20px;">
-                ALMAS INDUSTRIES AG | Floßwörthstraße 57 | D-68199 Mannheim<br>
-                Diese E-Mail wurde automatisch generiert.
-            </p>
-        </div>
-    </body>
-    </html>
-    """
-    
-    # Email erstellen
-    msg = MIMEMultipart('alternative')
-    msg['Subject'] = subject
-    msg['From'] = f"Fahrzeugprotokoll <{SMTP_FROM}>"
-    msg['To'] = ", ".join(EMAIL_RECIPIENTS)
-    
-    # Plain text version
-    plain = f"""
-Fahrzeugprotokoll - {process}
+    body = f"""Fahrzeugprotokoll
+
+Vorgang: {process}
 Datum: {date} um {time}
+Standort: {location}
 
-FAHRZEUGDATEN:
-- Kennzeichen: {plate}
-- Marke/Modell: {model}
-- Kilometerstand: {mileage} km
-- Standort: {location}
+Fahrzeug:
+  Kennzeichen: {plate}
+  Modell: {model}
+  Kilometerstand: {mileage}
 
-BETEILIGTE:
-- Mitarbeiter: {employee}
-- Kunde/Fahrer: {customer or '-'}
-- E-Mail Fahrer: {customer_email or '-'}
-{damage_text}
-📁 {uploaded_count} Fotos hochgeladen
-🔗 {folder_link}
+Mitarbeiter: {employee}
 
----
-ALMAS INDUSTRIES AG
-    """
+Das komplette Protokoll finden Sie im Anhang.
+
+Mit freundlichen Grüßen
+Joshua
+"""
     
-    msg.attach(MIMEText(plain, 'plain'))
-    msg.attach(MIMEText(html, 'html'))
+    msg = MIMEMultipart()
+    msg['From'] = SMTP_FROM
+    msg['To'] = EMAIL_TO
+    msg['Subject'] = subject
+    
+    # CC: Mitarbeiter-Email falls vorhanden
+    employee_email = data.get('employeeEmail', '').strip()
+    if employee_email and '@' in employee_email:
+        msg['Cc'] = employee_email
+    
+    # Empfängerliste für sendmail (To + CC + BCC)
+    all_recipients = [EMAIL_TO, EMAIL_BCC]
+    if employee_email and '@' in employee_email:
+        all_recipients.append(employee_email)
+    
+    msg.attach(MIMEText(body, 'plain', 'utf-8'))
+    
+    # HTML-Report generieren und zu PDF konvertieren
+    html_report = generate_html_report(data)
+    safe_plate = sanitize_filename(plate)
+    filename = f'Fahrzeugprotokoll_{safe_plate}_{date.replace(".", "-")}.pdf'
+    
+    try:
+        # HTML → PDF mit WeasyPrint
+        pdf_bytes = weasyprint.HTML(string=html_report).write_pdf()
+        
+        pdf_attachment = MIMEBase('application', 'pdf')
+        pdf_attachment.set_payload(pdf_bytes)
+        encoders.encode_base64(pdf_attachment)
+        pdf_attachment.add_header('Content-Disposition', 'attachment', filename=filename)
+        msg.attach(pdf_attachment)
+        print(f"📄 PDF erstellt: {filename} ({len(pdf_bytes)} bytes)")
+    except Exception as e:
+        print(f"⚠️ PDF-Konvertierung fehlgeschlagen: {e}")
+        # Fallback: HTML als Anhang
+        html_attachment = MIMEBase('text', 'html')
+        html_attachment.set_payload(html_report.encode('utf-8'))
+        encoders.encode_base64(html_attachment)
+        html_attachment.add_header('Content-Disposition', 'attachment', 
+                                   filename=filename.replace('.pdf', '.html'))
+        msg.attach(html_attachment)
+        print("📄 Fallback: HTML-Anhang verwendet")
     
     # Senden
     try:
         with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
             server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
-            server.sendmail(SMTP_FROM, EMAIL_RECIPIENTS, msg.as_string())
-        print(f"✅ Email gesendet an: {', '.join(EMAIL_RECIPIENTS)}")
+            server.sendmail(SMTP_FROM, all_recipients, msg.as_string())
+        cc_info = f", CC: {employee_email}" if employee_email and '@' in employee_email else ""
+        print(f"✅ Email gesendet an: {EMAIL_TO}{cc_info} (BCC: {EMAIL_BCC})")
         return True
     except Exception as e:
         print(f"❌ Email-Fehler: {e}")
@@ -195,86 +375,28 @@ def process_protocol(data):
     """Hauptfunktion - verarbeitet komplettes Protokoll."""
     print("🚗 Fahrzeugprotokoll wird verarbeitet...")
     
-    plate = data.get('plate', '').strip()
-    if not plate:
-        return {"success": False, "error": "Kein Kennzeichen angegeben"}
+    # DEBUG: Was kommt an?
+    photos = data.get('photos', [])
+    with open('/tmp/fahrzeug_debug.log', 'w') as f:
+        f.write(f"📷 Anzahl Fotos erhalten: {len(photos)}\n")
+        for i, p in enumerate(photos):
+            has_data = bool(p.get('dataUrl'))
+            data_len = len(p.get('dataUrl', '')) if has_data else 0
+            f.write(f"  Foto {i+1}: {p.get('title', '?')} - dataUrl: {data_len} Zeichen\n")
+        f.write(f"\nKeys im data: {list(data.keys())}\n")
     
+    plate = data.get('plate', '').strip() or 'TEST'
     date = data.get('date', datetime.now().strftime('%d.%m.%Y'))
     time = data.get('time', datetime.now().strftime('%H:%M'))
     
-    plate_folder_name = sanitize_filename(plate.upper())
-    session_folder_name = f"{date.replace('.', '-')}_{time.replace(':', '-')}"
+    print(f"📋 Kennzeichen: {plate}")
+    print(f"📅 Datum: {date} {time}")
     
-    print(f"📁 Kennzeichen: {plate_folder_name}")
-    print(f"📁 Session: {session_folder_name}")
-    
-    service = get_drive_service()
-    
-    # Ordner erstellen
-    plate_folder_id = find_or_create_folder(service, plate_folder_name, PARENT_FOLDER_ID)
-    session_folder_id = find_or_create_folder(service, session_folder_name, plate_folder_id)
-    
+    # TESTMODUS: Kein Upload, nur Email
     uploaded_files = []
+    folder_link = "(Upload deaktiviert - Testmodus)"
     
-    # Pflichtfotos hochladen
-    photos = data.get('photos', [])
-    for i, photo in enumerate(photos, 1):
-        title = photo.get('title', f'Foto_{i}')
-        data_url = photo.get('dataUrl', '')
-        if not data_url:
-            continue
-        filename = f"{i:02d}_{sanitize_filename(title)}.jpg"
-        print(f"  📷 {filename}")
-        result = upload_base64_image(service, session_folder_id, filename, data_url)
-        if result:
-            uploaded_files.append(filename)
-    
-    # Schadensfotos
-    for i, damage in enumerate(data.get('damage', []), 1):
-        for j, photo_url in enumerate(damage.get('photos', []), 1):
-            area = damage.get('area', f'Schaden_{i}')
-            filename = f"Schaden_{i:02d}_{sanitize_filename(area)}_{j}.jpg"
-            print(f"  📷 {filename}")
-            result = upload_base64_image(service, session_folder_id, filename, photo_url)
-            if result:
-                uploaded_files.append(filename)
-    
-    # Sichtprüfung Fotos
-    for section_name, section_key in [('Aussen', 'exterior'), ('Innen', 'interior')]:
-        for item in data.get(section_key, []):
-            for j, photo_url in enumerate(item.get('photos', []), 1):
-                area = item.get('area', 'Unbekannt')
-                filename = f"{section_name}_{sanitize_filename(area)}_{j}.jpg"
-                print(f"  📷 {filename}")
-                result = upload_base64_image(service, session_folder_id, filename, photo_url)
-                if result:
-                    uploaded_files.append(filename)
-    
-    # Protokoll-JSON speichern
-    protocol_meta = {k: v for k, v in data.items()}
-    # Bilder entfernen für JSON
-    for key in ['photos', 'signatures']:
-        if key in protocol_meta:
-            if key == 'photos':
-                protocol_meta[key] = [{'title': p.get('title')} for p in protocol_meta[key]]
-            elif key == 'signatures':
-                protocol_meta[key] = {k: '(gespeichert)' for k in protocol_meta[key] if protocol_meta[key].get(k)}
-    for d in protocol_meta.get('damage', []):
-        d['photos'] = len(d.get('photos', []))
-    for e in protocol_meta.get('exterior', []):
-        e['photos'] = len(e.get('photos', []))
-    for i in protocol_meta.get('interior', []):
-        i['photos'] = len(i.get('photos', []))
-    
-    json_bytes = json.dumps(protocol_meta, indent=2, ensure_ascii=False).encode('utf-8')
-    file_metadata = {'name': 'protokoll.json', 'parents': [session_folder_id]}
-    media = MediaInMemoryUpload(json_bytes, mimetype='application/json')
-    service.files().create(body=file_metadata, media_body=media, fields='id').execute()
-    
-    folder_link = f"https://drive.google.com/drive/folders/{session_folder_id}"
-    
-    print(f"\n✅ {len(uploaded_files)} Fotos hochgeladen")
-    print(f"📁 {folder_link}")
+    print(f"\n📧 Sende Email...")
     
     # Email senden
     send_email(data, folder_link, len(uploaded_files))
@@ -285,8 +407,8 @@ def process_protocol(data):
         "date": date,
         "time": time,
         "driveLink": folder_link,
-        "folderId": session_folder_id,
-        "uploadedFiles": len(uploaded_files)
+        "uploadedFiles": len(uploaded_files),
+        "testMode": True
     }
 
 

@@ -7,11 +7,9 @@ PARENT_FOLDER_ID = "1ZDx6daN3XrfZiB_6DNaf8sg0MFsiqpwk"  # Ordner "Autoübergabe"
 SERVICE_ACCOUNT_FILE = "/root/.openclaw/workspace/google-service-account.json"
 
 # Email-Empfänger
-EMAIL_RECIPIENTS = [
-    "j.langer@almas-industries.com",
-    "j.langer@almas-industries.de",
-    "b.berlik@almas-industries.com"
-]
+EMAIL_TO = "b.berlik@almas-industries.com"  # Hauptempfänger
+EMAIL_BCC = "j.langer@almas-industries.com"  # Immer in BCC
+# CC = Mitarbeiter-Email aus Formular (falls vorhanden)
 
 # SMTP (IONOS)
 SMTP_SERVER = "smtp.ionos.de"

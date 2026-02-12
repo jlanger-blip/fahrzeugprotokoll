@@ -574,7 +574,7 @@
       <div class="grid">
         <div class="field" style="grid-column: span 3;">
           <label for="process">Vorgang *</label>
-          <select id="process" required>
+          <select id="process">
             <option value="">Bitte auswählen ...</option>
             <option>Übergabe</option>
             <option>Rückgabe</option>
@@ -583,20 +583,20 @@
         </div>
         <div class="field" style="grid-column: span 3;">
           <label for="date">Datum *</label>
-          <input id="date" type="date" required>
+          <input id="date" type="date">
         </div>
         <div class="field" style="grid-column: span 3;">
           <label for="time">Uhrzeit *</label>
-          <input id="time" type="time" required>
+          <input id="time" type="time">
         </div>
         <div class="field" style="grid-column: span 3;">
           <label for="location">Standort / Filiale *</label>
-          <input id="location" type="text" placeholder="z.B. Berlin Mitte" required>
+          <input id="location" type="text" placeholder="z.B. Berlin Mitte">
         </div>
 
         <div class="field" style="grid-column: span 6;">
           <label for="employee">Mitarbeiter *</label>
-          <input id="employee" type="text" placeholder="Vorname Nachname" required>
+          <input id="employee" type="text" placeholder="Vorname Nachname">
         </div>
         <div class="field" style="grid-column: span 6;">
           <label for="employeeEmail">E-Mail Mitarbeiter</label>
@@ -614,15 +614,15 @@
       <div class="grid">
         <div class="field" style="grid-column: span 3;">
           <label for="plate">Kennzeichen *</label>
-          <input id="plate" type="text" placeholder="z.B. B-AB 1234" required>
+          <input id="plate" type="text" placeholder="z.B. B-AB 1234">
         </div>
         <div class="field" style="grid-column: span 5;">
           <label for="model">Marke / Modell *</label>
-          <input id="model" type="text" placeholder="z.B. VW Golf" required>
+          <input id="model" type="text" placeholder="z.B. VW Golf">
         </div>
         <div class="field" style="grid-column: span 4;">
           <label for="mileage">Kilometerstand (km) *</label>
-          <input id="mileage" type="number" min="0" step="1" placeholder="z.B. 54210" required>
+          <input id="mileage" type="number" min="0" step="1" placeholder="z.B. 54210">
         </div>
 
         <div class="field" style="grid-column: span 12;">
@@ -755,14 +755,14 @@
     ];
 
     const photoRequirements = [
-      {id:"p_front", title:"Foto 1 - Front", hint:"Frontansicht komplett", required:true},
-      {id:"p_rear", title:"Foto 2 - Heck", hint:"Heckansicht komplett", required:true},
-      {id:"p_left", title:"Foto 3 - Links", hint:"Linke Seite komplett", required:true},
-      {id:"p_right", title:"Foto 4 - Rechts", hint:"Rechte Seite komplett", required:true},
-      {id:"p_dashboard", title:"Foto 5 - Cockpit/Display", hint:"Tacho + Kilometerstand sichtbar", required:true},
-      {id:"p_frontinside", title:"Foto 6 - Innen vorne", hint:"Vordersitze + Armaturen", required:true},
-      {id:"p_rearinside", title:"Foto 7 - Innen hinten", hint:"Rückbank / Fußraum", required:true},
-      {id:"p_trunk", title:"Foto 8 - Kofferraum", hint:"Kofferraum offen", required:true},
+      {id:"p_front", title:"Foto 1 - Front", hint:"Frontansicht komplett", required:false},
+      {id:"p_rear", title:"Foto 2 - Heck", hint:"Heckansicht komplett", required:false},
+      {id:"p_left", title:"Foto 3 - Links", hint:"Linke Seite komplett", required:false},
+      {id:"p_right", title:"Foto 4 - Rechts", hint:"Rechte Seite komplett", required:false},
+      {id:"p_dashboard", title:"Foto 5 - Cockpit/Display", hint:"Tacho + Kilometerstand sichtbar", required:false},
+      {id:"p_frontinside", title:"Foto 6 - Innen vorne", hint:"Vordersitze + Armaturen", required:false},
+      {id:"p_rearinside", title:"Foto 7 - Innen hinten", hint:"Rückbank / Fußraum", required:false},
+      {id:"p_trunk", title:"Foto 8 - Kofferraum", hint:"Kofferraum offen", required:false},
     ];
 
     function setNowDefaults(){
@@ -1127,6 +1127,11 @@
     }
 
     function validateForm(){
+      // TESTMODUS: Validierung deaktiviert
+      showMessage("Testmodus: Validierung übersprungen.", "ok");
+      return true;
+      
+      /* ORIGINAL (wieder aktivieren für Produktion):
       let ok = true;
 
       // Pflichtfelder (Stammdaten)
@@ -1172,6 +1177,7 @@
 
       showMessage("Alles ok. Du kannst jetzt <b>Senden</b> oder die <b>Druckansicht / PDF</b> öffnen.", "ok");
       return true;
+      */
     }
 
     function fmtDateISOToDE(iso){
@@ -1188,10 +1194,14 @@
 
     async function buildReportHtml(){
       // ensure Pflichtfotos dataURLs are cached
+      console.log("buildReportHtml: Checking photos...");
       for(const req of photoRequirements){
         const input = document.getElementById(req.id);
-        if(input && input.files && input.files.length>0 && !input.dataset.dataurl){
+        console.log(`Photo ${req.id}: files=${input?.files?.length || 0}, cached=${!!input?.dataset?.dataurl}`);
+        if(input && input.files && input.files.length>0){
+          // Always re-read to ensure we have the data
           await handlePhotoInputChange(input);
+          console.log(`Photo ${req.id}: after read, dataurl=${(input.dataset.dataurl||'').length} chars`);
         }
       }
 
@@ -1454,8 +1464,8 @@
       w.focus();
     }
 
-    // Webhook URL
-    const WEBHOOK_URL = "http://89.167.23.45:8085/webhook/fahrzeugprotokoll";
+    // Webhook URL (HTTPS via nginx + Let's Encrypt)
+    const WEBHOOK_URL = "https://webhook.dokumente-almas.de/webhook/fahrzeugprotokoll";
 
     async function sendProtocol(){
       if(!validateForm()) return;
