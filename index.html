@@ -1490,7 +1490,6 @@
         
         if (result.success) {
           showMessage(`✅ <b>Protokoll erfolgreich gesendet!</b><br>
-            📁 <a href="${result.driveLink}" target="_blank">Fotos in Google Drive öffnen</a><br>
             📧 E-Mail wurde versendet.`, "ok");
         } else {
           throw new Error(result.message || "Unbekannter Fehler");
