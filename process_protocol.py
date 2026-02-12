@@ -215,16 +215,19 @@ def generate_html_report(data):
     <title>Fahrzeugprotokoll {plate}</title>
     <style>
         body {{ font-family: Arial, sans-serif; margin: 20px; }}
-        .header {{ display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 3px solid #e4032e; padding-bottom: 15px; }}
+        .header {{ display: flex; justify-content: flex-start; align-items: center; gap: 30px; margin-bottom: 20px; border-bottom: 3px solid #e4032e; padding-bottom: 15px; }}
         .logo {{ max-width: 200px; height: auto; }}
         h1 {{ color: #1e1f1d; margin: 0; }}
-        h2 {{ color: #333; border-bottom: 2px solid #e4032e; padding-bottom: 5px; }}
-        table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; }}
+        h2 {{ color: #333; border-bottom: 2px solid #e4032e; padding-bottom: 5px; page-break-after: avoid; }}
+        table {{ border-collapse: collapse; width: 100%; margin-bottom: 20px; page-break-inside: avoid; }}
+        thead {{ display: table-header-group; }}
+        tr {{ page-break-inside: avoid; }}
         th, td {{ border: 1px solid #ddd; padding: 8px; text-align: left; }}
         th {{ background-color: #f5f5f5; }}
-        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }}
+        .info-grid {{ display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; page-break-inside: avoid; }}
         .info-item {{ padding: 10px; background: #f9f9f9; }}
         .label {{ font-weight: bold; color: #666; }}
+        @media print {{ table {{ page-break-inside: avoid; }} tr {{ page-break-inside: avoid; }} h2 {{ page-break-after: avoid; }} }}
     </style>
 </head>
 <body>
