@@ -322,15 +322,16 @@ Joshua
     msg['To'] = EMAIL_TO
     msg['Subject'] = subject
     
-    # CC: Mitarbeiter-Email falls vorhanden
+    # CC: Simone Helfrich + Mitarbeiter-Email falls vorhanden
+    from config import EMAIL_CC
+    cc_list = [EMAIL_CC]
     employee_email = data.get('employeeEmail', '').strip()
     if employee_email and '@' in employee_email:
-        msg['Cc'] = employee_email
+        cc_list.append(employee_email)
+    msg['Cc'] = ', '.join(cc_list)
     
     # Empfängerliste für sendmail (To + CC + BCC)
-    all_recipients = [EMAIL_TO, EMAIL_BCC]
-    if employee_email and '@' in employee_email:
-        all_recipients.append(employee_email)
+    all_recipients = [EMAIL_TO, EMAIL_BCC] + cc_list
     
     msg.attach(MIMEText(body, 'plain', 'utf-8'))
     
